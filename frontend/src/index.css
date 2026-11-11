@@ -1,0 +1,194 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/sora";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: 'Sora Variable', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-sans: 'DM Sans Variable', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Dark developer-tool palette by default — obsidian surfaces, emerald signal. */
+:root {
+    --background: #0B0F17;
+    --foreground: #F1F5F9;
+    --card: #111827;
+    --card-foreground: #F8FAFC;
+    --popover: #111827;
+    --popover-foreground: #F8FAFC;
+    --primary: #10B981;
+    --primary-foreground: #041F15;
+    --secondary: #1E293B;
+    --secondary-foreground: #F1F5F9;
+    --muted: #0F172A;
+    --muted-foreground: #94A3B8;
+    --accent: #1E293B;
+    --accent-foreground: #F8FAFC;
+    --destructive: #F87171;
+    --border: #1E293B;
+    --input: #1E293B;
+    --ring: #10B981;
+    --chart-1: #34D399;
+    --chart-2: #06B6D4;
+    --chart-3: #F59E0B;
+    --chart-4: #38BDF8;
+    --chart-5: #94A3B8;
+    --radius: 0.625rem;
+    --sidebar: #0F172A;
+    --sidebar-foreground: #F1F5F9;
+    --sidebar-primary: #10B981;
+    --sidebar-primary-foreground: #041F15;
+    --sidebar-accent: #1E293B;
+    --sidebar-accent-foreground: #F8FAFC;
+    --sidebar-border: #1E293B;
+    --sidebar-ring: #10B981;
+}
+
+.dark {
+    --background: #0B0F17;
+    --foreground: #F1F5F9;
+    --card: #111827;
+    --card-foreground: #F8FAFC;
+    --popover: #111827;
+    --popover-foreground: #F8FAFC;
+    --primary: #10B981;
+    --primary-foreground: #041F15;
+    --secondary: #1E293B;
+    --secondary-foreground: #F1F5F9;
+    --muted: #0F172A;
+    --muted-foreground: #94A3B8;
+    --accent: #1E293B;
+    --accent-foreground: #F8FAFC;
+    --destructive: #F87171;
+    --border: #1E293B;
+    --input: #1E293B;
+    --ring: #10B981;
+    --chart-1: #34D399;
+    --chart-2: #06B6D4;
+    --chart-3: #F59E0B;
+    --chart-4: #38BDF8;
+    --chart-5: #94A3B8;
+    --sidebar: #0F172A;
+    --sidebar-foreground: #F1F5F9;
+    --sidebar-primary: #10B981;
+    --sidebar-primary-foreground: #041F15;
+    --sidebar-accent: #1E293B;
+    --sidebar-accent-foreground: #F8FAFC;
+    --sidebar-border: #1E293B;
+    --sidebar-ring: #10B981;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+
+/* Micro-animation vocabulary — targeted properties, never transition: all. */
+@layer utilities {
+  .card-hover {
+    transition-property: border-color, transform, box-shadow;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .card-hover:hover {
+    border-color: #334155;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px -12px rgb(0 0 0 / 0.5);
+  }
+  .stage-glow {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  }
+}
+
+/* Recruiter dossier → paper. Browsers drop dark backgrounds when printing, which would leave
+   light text on white — so the print layout flips to dark ink on white explicitly. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  html,
+  body,
+  .print-root {
+    background: #ffffff !important;
+    min-height: 0 !important;
+  }
+  .no-print,
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+    color: #64748b !important;
+  }
+  .print-doc {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .print-doc *:not(.print-keep-bg) {
+    color: #0f172a !important;
+    background: transparent !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+  }
+  .print-doc a {
+    color: #0369a1 !important;
+  }
+  .print-doc .print-keep-bg {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-doc section,
+  .print-doc article {
+    break-inside: avoid;
+  }
+}
