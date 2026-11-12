@@ -106,21 +106,39 @@ def test_norm_pr_own_repo_flag():
     assert item["is_own_repo"] is True
 
 
-def test_score_merged_external_pr_outranks_own_closed():
-    external_merged = {
+def _external_merged_pr(**over):
+    base = {
         "kind": "pr", "state": "merged", "merged": True, "is_own_repo": False,
+        "eligibility_status": "ELIGIBLE_EXTERNAL",
         "additions": 400, "deletions": 60, "changed_files": 12, "commits_count": 6,
         "review_count": 4, "approvals": 2, "change_requests": 2, "comments": 8,
-        "complexity": "High",
+        "reviewers": 3, "complexity": "High", "files_total": 12,
+        "file_categories": {
+            "source": {"files": 9, "additions": 380, "deletions": 50},
+            "test": {"files": 3, "additions": 20, "deletions": 10},
+        },
+        "patch_ratio": 0.9, "ci_status": "success", "linked_issue_count": 1,
+        "evidence_status": "complete",
     }
+    base.update(over)
+    return base
+
+
+def test_score_merged_external_pr_outranks_own_closed():
+    external_merged = _external_merged_pr()
     own_closed = {
         "kind": "pr", "state": "closed", "is_own_repo": True,
+        "eligibility_status": "EXCLUDED_SELF_OWNED",
         "additions": 20, "deletions": 5, "comments": 0, "complexity": "Low",
     }
     a = score_contribution(external_merged)
     b = score_contribution(own_closed)
     assert a["impact_score"] > b["impact_score"]
-    assert set(a["dimensions"]) == {"substance", "collaboration", "acceptance", "context", "problem_complexity"}
+    assert set(a["dimensions"]) == {
+        "technical_substance", "code_quality", "testing", "problem_significance",
+        "collaboration", "acceptance", "context",
+    }
+    assert a["confidence"] == "High"
     # determinism
     assert score_contribution(external_merged) == a
 
@@ -129,3 +147,16 @@ def test_score_review_evidence():
     approved = score_contribution({"kind": "review", "state": "APPROVED", "is_own_repo": False})
     commented = score_contribution({"kind": "review", "state": "COMMENTED", "is_own_repo": False})
     assert approved["dimensions"]["collaboration"] > commented["dimensions"]["collaboration"]
+
+
+def test_pr_doc_to_item_uses_real_comment_count():
+    """PR contributions surface stored discussion counts, not a hardcoded 0."""
+    pr = {
+        "repo": "o/r", "number": 5, "title": "t", "pr_key": "o/r#5",
+        "state": "merged", "merged": True, "comment_count": 9,
+        "occurred_at": __import__("datetime").datetime(2024, 1, 1, tzinfo=__import__("datetime").timezone.utc),
+    }
+    item = pipeline.pr_doc_to_item(pr, {}, "ELIGIBLE_EXTERNAL", "me")
+    assert item["comments"] == 9
+    # docs ingested before comment_count existed still project safely
+    assert pipeline.pr_doc_to_item({"repo": "o/r", "number": 6}, {}, None, "me")["comments"] == 0

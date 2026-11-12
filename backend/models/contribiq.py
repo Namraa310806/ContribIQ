@@ -36,6 +36,7 @@ class User(BaseModel):
     last_synced_at: Optional[datetime] = None
     excluded_repos: List[str] = Field(default_factory=list)  # owner/name, skipped by future fetches
     auto_sync: bool = False  # weekly re-analysis, opt-in
+    oss_only: bool = False  # restrict ingestion to repos the user doesn't own/collaborate on
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -50,6 +51,7 @@ class UserPublic(BaseModel):
     last_synced_at: Optional[datetime] = None
     excluded_repos: List[str] = Field(default_factory=list)
     auto_sync: bool = False
+    oss_only: bool = False
 
 
 class MeResponse(BaseModel):
@@ -91,6 +93,11 @@ class Contribution(BaseModel):
     change_requests: int = 0
     reviewers: int = 0
     pr_author: str = ""  # for kind=review: who authored the reviewed PR
+    pr_key: Optional[str] = None  # "owner/repo#123" — links to pull_requests evidence
+    eligibility_status: Optional[str] = None  # ELIGIBLE_EXTERNAL | EXCLUDED_* | REVIEW_REQUIRED | UNKNOWN
+    confidence: str = "Medium"  # High | Medium | Low | Insufficient — evidence completeness
+    ci_status: str = "unknown"  # success | failure | pending | none | unknown
+    evidence_status: str = "pending"  # complete | partial | failed | pending
     category: str = "Other"
     complexity: str = "Medium"  # Low | Medium | High
     impact_score: int = 0
@@ -188,6 +195,9 @@ class OverviewStats(BaseModel):
     merged_prs: int = 0
     external_prs: int = 0
     prs_reviewed: int = 0  # reviews the user wrote on others' PRs
+    eligible_prs: int = 0  # authored PRs in verified-external repos (OSS credit)
+    excluded_prs: int = 0  # authored PRs excluded from OSS scoring (own/controlled repos)
+    prs_fully_analyzed: int = 0  # PRs whose evidence fetch completed
     top_skill: str = ""
     avg_impact: int = 0
     collaboration_score: int = 0  # mean collaboration dimension over PR+review evidence
@@ -276,6 +286,10 @@ class AutoSyncRequest(BaseModel):
     enabled: bool
 
 
+class OssOnlyRequest(BaseModel):
+    enabled: bool
+
+
 # ---------- job-tailored insights ----------
 
 class TailoredSet(BaseModel):
@@ -296,3 +310,149 @@ class CreateTailoredRequest(BaseModel):
 
 class TailoredListResponse(BaseModel):
     items: List[TailoredSet]
+
+
+# ---------- PR evidence ----------
+
+class PullRequestEvidence(BaseModel):
+    """The primary engineering-evidence object — one authored PR with its
+    collected files, reviews, comments, CI and linked-issue context."""
+
+    id: Optional[str] = None
+    user_id: str = ""
+    pr_key: str
+    repo: str
+    number: Optional[int] = None
+    github_id: Optional[int] = None
+    title: str = ""
+    body: str = ""
+    state: str = ""
+    merged: bool = False
+    draft: bool = False
+    author: str = ""
+    author_association: str = ""
+    labels: List[str] = Field(default_factory=list)
+    additions: int = 0
+    deletions: int = 0
+    changed_files: int = 0
+    commits_count: int = 0
+    comment_count: int = 0  # conversation + inline review comments (GitHub totals)
+    base_ref: str = ""
+    head_ref: str = ""
+    head_sha: str = ""
+    html_url: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
+    merged_at: Optional[datetime] = None
+    occurred_at: Optional[datetime] = None
+    # evidence rollups
+    files_summary: Dict = Field(default_factory=dict)
+    review_summary: Dict = Field(default_factory=dict)
+    ci_status: str = "unknown"
+    linked_issues: List[Dict] = Field(default_factory=list)
+    author_replied: bool = False
+    evidence_status: str = "pending"
+    evidence_errors: List[str] = Field(default_factory=list)
+    evidence_fetched_at: Optional[datetime] = None
+    eligibility_status: Optional[str] = None
+    eligibility_reason: Optional[str] = None
+    # Integration outcome: reverted / superseded_by / revert detection source.
+    outcome: Dict = Field(default_factory=dict)
+
+
+class PrFile(BaseModel):
+    pr_key: str
+    path: str = ""
+    previous_path: str = ""
+    status: str = ""
+    additions: int = 0
+    deletions: int = 0
+    changes: int = 0
+    patch: Optional[str] = None
+    patch_available: bool = False
+    patch_truncated: bool = False
+    extension: str = ""
+    category: str = "source"
+
+
+class PrReview(BaseModel):
+    pr_key: str
+    review_id: Optional[int] = None
+    reviewer_login: str = ""
+    state: str = ""
+    submitted_at: Optional[datetime] = None
+    body: str = ""
+    commit_id: str = ""
+    html_url: str = ""
+
+
+class PrComment(BaseModel):
+    """One discussion comment on a PR — kind distinguishes inline review
+    comments (path/line anchored) from PR-level conversation comments."""
+
+    pr_key: str
+    kind: str = "conversation"  # review | conversation
+    user_login: str = ""
+    path: str = ""
+    line: Optional[int] = None
+    side: str = ""
+    body: str = ""
+    in_reply_to_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    html_url: str = ""
+
+
+class PrCheck(BaseModel):
+    pr_key: str
+    name: str = ""
+    source: str = ""
+    status: str = ""
+    conclusion: Optional[str] = None
+    url: str = ""
+    completed_at: Optional[datetime] = None
+
+
+class PrDetailResponse(BaseModel):
+    pr: PullRequestEvidence
+    files: List[PrFile] = Field(default_factory=list)
+    reviews: List[PrReview] = Field(default_factory=list)
+    comments: List[PrComment] = Field(default_factory=list)
+    checks: List[PrCheck] = Field(default_factory=list)
+
+
+class RepoEligibilityInfo(BaseModel):
+    repo: str
+    status: str
+    reason: str = ""
+    confidence: float = 0.0
+    owner: str = ""
+    owner_type: str = ""
+    is_fork: bool = False
+    upstream: str = ""
+    user_is_org_member: bool = False
+    verified_at: Optional[datetime] = None
+
+
+class SyncWindow(BaseModel):
+    kind: str
+    window_start: str
+    window_end: str
+    total_count: int = 0
+    fetched: int = 0
+    status: str = ""
+    error: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+class CoverageResponse(BaseModel):
+    """Data-coverage report — what discovery actually reached, never implied."""
+
+    last_synced_at: Optional[datetime] = None
+    windows: List[SyncWindow] = Field(default_factory=list)
+    windows_complete: int = 0
+    windows_incomplete: int = 0
+    eligibility: Dict[str, int] = Field(default_factory=dict)  # status -> repo count
+    prs_by_evidence: Dict[str, int] = Field(default_factory=dict)  # complete|partial|failed|pending
+    prs_total: int = 0
+    coverage_note: str = ""

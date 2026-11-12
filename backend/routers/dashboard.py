@@ -47,7 +47,23 @@ async def overview(request: Request):
     reviews = sum(1 for c in contributions if c.get("kind") == "review")
     authored_prs = [c for c in contributions if c.get("kind") == "pr"]
     merged_prs = sum(1 for c in authored_prs if c.get("merged") or c.get("state") == "merged")
-    external_prs = sum(1 for c in authored_prs if c.get("is_own_repo") is False)
+    # Eligibility-aware OSS accounting: only verified-external repos earn
+    # open-source credit; legacy rows without a verdict fall back to is_own_repo.
+    EXCLUDED_STATUSES = {"EXCLUDED_SELF_OWNED", "EXCLUDED_CONTROLLED_ORGANIZATION"}
+
+    def _is_eligible(c: dict) -> bool:
+        status = c.get("eligibility_status")
+        if status:
+            return status == "ELIGIBLE_EXTERNAL"
+        return c.get("is_own_repo") is False
+
+    external_prs = sum(1 for c in authored_prs if _is_eligible(c))
+    excluded_prs = sum(
+        1 for c in authored_prs
+        if c.get("eligibility_status") in EXCLUDED_STATUSES
+        or (not c.get("eligibility_status") and c.get("is_own_repo"))
+    )
+    fully_analyzed = sum(1 for c in authored_prs if c.get("evidence_status") == "complete")
     # Collaboration index: mean of the collaboration dimension over PR + review evidence.
     collab_vals = [
         (c.get("dimensions") or {}).get("collaboration")
@@ -71,6 +87,9 @@ async def overview(request: Request):
         merged_prs=merged_prs,
         external_prs=external_prs,
         prs_reviewed=reviews,
+        eligible_prs=external_prs,
+        excluded_prs=excluded_prs,
+        prs_fully_analyzed=fully_analyzed,
         top_skill=skills[0]["name"] if skills else "",
         avg_impact=avg,
         collaboration_score=collaboration_score,

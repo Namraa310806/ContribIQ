@@ -88,4 +88,5 @@ def to_public(user: dict) -> dict:
         "last_synced_at": user.get("last_synced_at"),
         "excluded_repos": list(user.get("excluded_repos") or []),
         "auto_sync": bool(user.get("auto_sync")),
+        "oss_only": bool(user.get("oss_only")),
     }

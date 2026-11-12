@@ -63,7 +63,7 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
-from routers import analysis, auth, cron, dashboard, repos, settings, shares, tailored
+from routers import analysis, auth, cron, dashboard, prs, repos, settings, shares, tailored
 
 
 # Include resource routers — every route below lands under /api via api_router's prefix.
@@ -74,6 +74,7 @@ api_router.include_router(shares.router)
 api_router.include_router(settings.router)
 api_router.include_router(repos.router)
 api_router.include_router(tailored.router)
+api_router.include_router(prs.router)
 api_router.include_router(cron.router)
 
 # Include the router in the main app

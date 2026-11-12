@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request
 
 from lib.db import db
 from lib.session import require_user, to_public
-from models.contribiq import AutoSyncRequest, DeleteDataResponse, UserPublic
+from models.contribiq import AutoSyncRequest, DeleteDataResponse, OssOnlyRequest, UserPublic
 
 router = APIRouter(tags=["settings"])
 
@@ -17,6 +17,16 @@ async def set_auto_sync(body: AutoSyncRequest, request: Request):
     user = await require_user(request)
     await db.users.update_one({"id": user["id"]}, {"$set": {"auto_sync": body.enabled}})
     user["auto_sync"] = body.enabled
+    return UserPublic(**to_public(user))
+
+
+@router.put("/settings/oss-only", response_model=UserPublic)
+async def set_oss_only(body: OssOnlyRequest, request: Request):
+    """Open-source-only mode: future syncs skip repos the user owns, collaborates
+    on, or belongs to the owning org of. Already-ingested evidence is kept."""
+    user = await require_user(request)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"oss_only": body.enabled}})
+    user["oss_only"] = body.enabled
     return UserPublic(**to_public(user))
 
 
