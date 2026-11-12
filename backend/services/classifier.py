@@ -31,7 +31,10 @@ CANON_TECH = {
 
 _SYSTEM = (
     "You are a precise senior engineering manager triaging a developer's public GitHub work. "
-    "For each item you output: category (exactly one of: "
+    "You are given structured PR evidence: changed-file categories (source/test/docs/config), "
+    "CI status, merge state, review counts, and repository eligibility. Classify the engineering "
+    "substance — a small concurrency fix is not 'Low' just because it is small, and a docs-only "
+    "PR is not 'High' just because it is large. For each item you output: category (exactly one of: "
     + ", ".join(CATEGORIES)
     + "), complexity (Low, Medium or High), impact_score (0-100 integer, 90+ means outage-level or "
     "money-critical work, 70+ means significant system change, 50+ meaningful improvement, below is routine), "
@@ -109,10 +112,23 @@ async def classify_batch(items: List[dict]) -> List[dict]:
             "kind": it.get("kind"),
             "repo": it.get("repo"),
             "repo_context": "own repository" if it.get("is_own_repo") else "independent codebase",
+            "eligibility": it.get("eligibility_status") or ("own" if it.get("is_own_repo") else "external/unverified"),
             "title": it.get("title"),
             "body": (it.get("body") or "")[:400],
             "labels": it.get("labels", []),
             "state": it.get("state", ""),
+            "merged": it.get("merged", False),
+            "ci_status": it.get("ci_status") or "unknown",
+            "file_categories": {
+                cat: (info or {}).get("files", 0)
+                for cat, info in (it.get("file_categories") or {}).items()
+            } or None,
+            # Bounded patch excerpts — real implementation evidence, capped so
+            # the context window stays small. Absent patches mean "unavailable",
+            # never "bad code".
+            "patch_samples": (it.get("patch_samples") or [])[:2] or None,
+            "linked_issues": it.get("linked_issue_count") or 0,
+            "unique_reviewers": it.get("reviewers") or 0,
         }
         for i, it in enumerate(items)
     ]

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CalendarClock, Check, Copy, Link2, Loader2, LogOut, ShieldAlert, Trash2 } from "lucide-react";
+import { CalendarClock, Check, Copy, Database, Globe, Link2, Loader2, LogOut, ShieldAlert, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import AppHeader from "@/components/AppHeader";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import { ME_KEY, endSession, useMe } from "@/lib/session";
-import type { DeleteDataResponse, ShareInfo, ShareStateResponse, UserPublic } from "@/types";
+import type { CoverageResponse, DeleteDataResponse, ShareInfo, ShareStateResponse, UserPublic } from "@/types";
 
 const EXPIRY_OPTIONS = [
   { days: "7", label: "7 days" },
@@ -45,6 +45,13 @@ export default function Settings() {
     queryFn: () => apiGet<ShareStateResponse>("/share"),
   });
   const share = shareQuery.data?.share ?? null;
+
+  const coverageQuery = useQuery({
+    queryKey: ["coverage"],
+    queryFn: () => apiGet<CoverageResponse>("/coverage"),
+    staleTime: 60_000,
+  });
+  const coverage = coverageQuery.data ?? null;
   const shareUrl = share ? `${window.location.origin}${share.path}` : "";
 
   const createShare = useMutation({
@@ -93,6 +100,19 @@ export default function Settings() {
       toast.success(updated.auto_sync ? "Weekly auto-sync is on" : "Weekly auto-sync is off");
     },
     onError: () => toast.error("Could not update auto-sync"),
+  });
+
+  const ossOnly = useMutation({
+    mutationFn: (enabled: boolean) => apiPut<UserPublic>("/settings/oss-only", { enabled }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(ME_KEY, { user: updated });
+      toast.success(
+        updated.oss_only
+          ? "Open-source only — future syncs skip repos you own or collaborate on"
+          : "All repositories included again",
+      );
+    },
+    onError: () => toast.error("Could not update open-source mode"),
   });
 
   const copyShare = async () => {
@@ -301,6 +321,91 @@ export default function Settings() {
                 />
                 <span className="text-sm text-slate-200">{user.auto_sync ? "On — weekly" : "Off"}</span>
               </label>
+            </div>
+          </section>
+
+          {/* Open-source only */}
+          <section className="rounded-xl border border-border bg-card p-6 lg:col-span-12">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                <Globe className="h-5 w-5" />
+              </span>
+              <div className="flex-1">
+                <h2 className="font-heading text-lg font-semibold tracking-tight text-slate-100">
+                  Open-source contributions only
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm text-slate-400">
+                  When on, analysis only ingests repositories you don't own, aren't a
+                  collaborator on, and don't belong to the owning org of — your own
+                  projects and team repos are skipped. Already-collected evidence stays.
+                </p>
+              </div>
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                <Checkbox
+                  data-testid="settings-oss-only-toggle"
+                  checked={user.oss_only}
+                  disabled={ossOnly.isPending}
+                  onCheckedChange={(value) => ossOnly.mutate(Boolean(value))}
+                />
+                <span className="text-sm text-slate-200">{user.oss_only ? "On — external repos only" : "Off"}</span>
+              </label>
+            </div>
+          </section>
+
+          {/* Data coverage — honest sync/evidence report */}
+          <section className="rounded-xl border border-border bg-card p-6 lg:col-span-12">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+                <Database className="h-5 w-5" />
+              </span>
+              <div className="flex-1">
+                <h2 className="font-heading text-lg font-semibold tracking-tight text-slate-100">
+                  Data coverage
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm text-slate-400">
+                  What the last sync actually reached — search windows, verified repository
+                  ownership, and PR evidence completeness. Incomplete coverage is shown, never hidden.
+                </p>
+                {coverageQuery.isLoading ? (
+                  <p className="mt-4 flex items-center gap-2 font-mono text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading coverage…
+                  </p>
+                ) : coverage ? (
+                  <div className="mt-4 space-y-3">
+                    <p className="font-mono text-xs text-slate-300" data-testid="coverage-note">
+                      {coverage.coverage_note}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded border border-border bg-secondary px-2 py-1 font-mono text-[11px] text-slate-300">
+                        search windows {coverage.windows_complete}/{coverage.windows.length} complete
+                      </span>
+                      <span className="rounded border border-border bg-secondary px-2 py-1 font-mono text-[11px] text-slate-300">
+                        PRs discovered {coverage.prs_total}
+                      </span>
+                      {Object.entries(coverage.prs_by_evidence).map(([k, v]) => (
+                        <span key={k} className="rounded border border-border bg-secondary px-2 py-1 font-mono text-[11px] text-slate-300">
+                          {k} {v}
+                        </span>
+                      ))}
+                      {Object.entries(coverage.eligibility).map(([k, v]) => (
+                        <span key={k} className="rounded border border-border bg-secondary px-2 py-1 font-mono text-[11px] text-slate-300">
+                          {k.toLowerCase().replace(/_/g, " ")} {v}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      Last synced:{" "}
+                      {coverage.last_synced_at
+                        ? new Date(coverage.last_synced_at).toLocaleString()
+                        : "never"}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-4 font-mono text-xs text-muted-foreground">
+                    Run an analysis to generate coverage data.
+                  </p>
+                )}
+              </div>
             </div>
           </section>
 

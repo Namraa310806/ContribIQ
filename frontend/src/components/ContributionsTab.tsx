@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ChevronDown, ExternalLink } from "lucide-react";
+import { ChevronDown, ExternalLink, FileSearch } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Contribution, ContributionKind } from "@/types";
+import PrEvidenceSheet from "@/components/PrEvidenceSheet";
 
 const TYPE_STYLES: Record<ContributionKind, { label: string; cls: string }> = {
   pr: { label: "PR", cls: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300" },
@@ -19,6 +20,42 @@ const TYPE_STYLES: Record<ContributionKind, { label: string; cls: string }> = {
 };
 
 const COMPLEXITY_DOTS: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
+
+// Repository-eligibility badge: own/controlled-org work is labelled honestly and
+// never presented as external open-source collaboration.
+function eligibilityBadge(c: Contribution): { label: string; cls: string; title: string } {
+  switch (c.eligibility_status) {
+    case "ELIGIBLE_EXTERNAL":
+      return { label: "external", cls: "border-sky-500/30 bg-sky-500/10 text-sky-300", title: "Independently maintained repository" };
+    case "EXCLUDED_SELF_OWNED":
+      return { label: "own repo", cls: "border-slate-600/60 bg-slate-700/30 text-slate-400", title: "Owned by you — excluded from open-source scoring" };
+    case "EXCLUDED_CONTROLLED_ORGANIZATION":
+      return { label: "own org", cls: "border-slate-600/60 bg-slate-700/30 text-slate-400", title: "Organization you belong to — excluded from open-source scoring" };
+    case "REVIEW_REQUIRED":
+      return { label: "review", cls: "border-amber-500/30 bg-amber-500/10 text-amber-300", title: "Ownership uncertain — manual review advised" };
+    case "UNKNOWN":
+      return { label: "unverified", cls: "border-slate-500/30 bg-slate-500/10 text-slate-400", title: "Repository ownership could not be verified" };
+    default:
+      return c.is_own_repo
+        ? { label: "own repo", cls: "border-slate-600/60 bg-slate-700/30 text-slate-400", title: "Repo owned by you" }
+        : { label: "external", cls: "border-sky-500/30 bg-sky-500/10 text-sky-300", title: "Independent codebase" };
+  }
+}
+
+function isExternalEligible(c: Contribution): boolean {
+  if (c.eligibility_status) return c.eligibility_status === "ELIGIBLE_EXTERNAL";
+  return !c.is_own_repo;
+}
+
+function isSelfOwned(c: Contribution): boolean {
+  if (c.eligibility_status) {
+    return (
+      c.eligibility_status === "EXCLUDED_SELF_OWNED" ||
+      c.eligibility_status === "EXCLUDED_CONTROLLED_ORGANIZATION"
+    );
+  }
+  return c.is_own_repo;
+}
 
 function ImpactBar({ score }: { score: number }) {
   const bar =
@@ -65,11 +102,13 @@ function ContributionRow({
   contribution,
   open,
   onToggle,
+  onShowEvidence,
   index,
 }: {
   contribution: Contribution;
   open: boolean;
   onToggle: () => void;
+  onShowEvidence: () => void;
   index: number;
 }) {
   return (
@@ -96,19 +135,17 @@ function ContributionRow({
           </span>
           {(contribution.kind === "pr" || contribution.kind === "review") && (
             <span className="mt-1 flex flex-wrap items-center gap-1">
-              {contribution.kind === "pr" && (
-                <span
-                  className={
-                    "rounded border px-1.5 py-px font-mono text-[10px] uppercase tracking-wider " +
-                    (contribution.is_own_repo
-                      ? "border-slate-600/60 bg-slate-700/30 text-slate-400"
-                      : "border-sky-500/30 bg-sky-500/10 text-sky-300")
-                  }
-                  title={contribution.is_own_repo ? "Repo owned by you" : "Independent codebase"}
-                >
-                  {contribution.is_own_repo ? "own repo" : "external"}
-                </span>
-              )}
+              {contribution.kind === "pr" && (() => {
+                const badge = eligibilityBadge(contribution);
+                return (
+                  <span
+                    className={"rounded border px-1.5 py-px font-mono text-[10px] uppercase tracking-wider " + badge.cls}
+                    title={badge.title}
+                  >
+                    {badge.label}
+                  </span>
+                );
+              })()}
               {contribution.kind === "pr" && contribution.merged && (
                 <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-px font-mono text-[10px] uppercase tracking-wider text-emerald-300">
                   merged
@@ -175,6 +212,12 @@ function ContributionRow({
               </span>
             )}
             <span>impact {contribution.impact_score}/100</span>
+            {contribution.kind === "pr" && contribution.confidence && (
+              <span title="Evidence completeness — missing data lowers confidence, never fabricates a verdict">
+                confidence {contribution.confidence.toLowerCase()}
+                {contribution.ci_status && contribution.ci_status !== "unknown" ? ` · ci ${contribution.ci_status}` : ""}
+              </span>
+            )}
             {contribution.url && (
               <a
                 href={contribution.url}
@@ -184,6 +227,16 @@ function ContributionRow({
               >
                 View on GitHub <ExternalLink className="h-3 w-3" />
               </a>
+            )}
+            {contribution.kind === "pr" && contribution.pr_key && contribution.number != null && (
+              <button
+                type="button"
+                data-testid="contribution-pr-evidence-btn"
+                onClick={onShowEvidence}
+                className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300"
+              >
+                <FileSearch className="h-3 w-3" /> PR evidence
+              </button>
             )}
           </div>
         </div>
@@ -207,14 +260,15 @@ export default function ContributionsTab({
   const [category, setCategory] = useState("all");
   const [repoCtx, setRepoCtx] = useState("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [evidencePr, setEvidencePr] = useState<{ repo: string; number: number } | null>(null);
 
   const filtered = useMemo(
     () =>
       items.filter((c) => {
         if (kind !== "all" && c.kind !== kind) return false;
         if (category !== "all" && c.category !== category) return false;
-        if (repoCtx === "own" && !c.is_own_repo) return false;
-        if (repoCtx === "external" && c.is_own_repo) return false;
+        if (repoCtx === "own" && !isSelfOwned(c)) return false;
+        if (repoCtx === "external" && !isExternalEligible(c)) return false;
         if (q && !`${c.title} ${c.summary} ${c.repo}`.toLowerCase().includes(q.toLowerCase())) return false;
         return true;
       }),
@@ -280,6 +334,9 @@ export default function ContributionsTab({
             index={idx}
             open={openId === contribution.id}
             onToggle={() => setOpenId(openId === contribution.id ? null : contribution.id)}
+            onShowEvidence={() =>
+              setEvidencePr({ repo: contribution.repo, number: contribution.number as number })
+            }
           />
         ))}
         {filtered.length === 0 && (
@@ -288,6 +345,15 @@ export default function ContributionsTab({
           </p>
         )}
       </div>
+
+      <PrEvidenceSheet
+        repo={evidencePr?.repo ?? ""}
+        number={evidencePr?.number ?? null}
+        open={evidencePr != null}
+        onOpenChange={(open) => {
+          if (!open) setEvidencePr(null);
+        }}
+      />
     </div>
   );
 }

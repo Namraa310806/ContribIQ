@@ -39,6 +39,42 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("user_id", ASCENDING), ("dedupe_key", ASCENDING)], name="user_dedupe", unique=True),
         IndexModel([("user_id", ASCENDING), ("occurred_at", DESCENDING)], name="user_occurred"),
         IndexModel([("user_id", ASCENDING), ("category", ASCENDING)], name="user_category"),
+        IndexModel([("user_id", ASCENDING), ("kind", ASCENDING), ("state", ASCENDING)], name="user_kind_state"),
+        IndexModel([("user_id", ASCENDING), ("eligibility_status", ASCENDING)], name="user_eligibility"),
+    ],
+    # ---- PR-centric evidence collections ----
+    "pull_requests": [
+        IndexModel([("user_id", ASCENDING), ("pr_key", ASCENDING)], name="user_pr_key", unique=True),
+        IndexModel([("user_id", ASCENDING), ("repo", ASCENDING)], name="user_repo"),
+        IndexModel([("user_id", ASCENDING), ("occurred_at", DESCENDING)], name="user_occurred"),
+        IndexModel([("user_id", ASCENDING), ("evidence_status", ASCENDING)], name="user_evidence"),
+    ],
+    "pr_files": [
+        IndexModel([("user_id", ASCENDING), ("pr_key", ASCENDING)], name="user_pr_key"),
+    ],
+    "pr_reviews": [
+        IndexModel([("user_id", ASCENDING), ("pr_key", ASCENDING)], name="user_pr_key"),
+        IndexModel([("pr_key", ASCENDING), ("reviewer_login", ASCENDING)], name="pr_reviewer"),
+    ],
+    "pr_review_comments": [
+        IndexModel([("user_id", ASCENDING), ("pr_key", ASCENDING)], name="user_pr_key"),
+    ],
+    "pr_comments": [
+        IndexModel([("user_id", ASCENDING), ("pr_key", ASCENDING)], name="user_pr_key"),
+    ],
+    "pr_commits": [
+        IndexModel([("user_id", ASCENDING), ("pr_key", ASCENDING)], name="user_pr_key"),
+        IndexModel([("user_id", ASCENDING), ("sha", ASCENDING)], name="user_sha"),
+    ],
+    "pr_checks": [
+        IndexModel([("user_id", ASCENDING), ("pr_key", ASCENDING)], name="user_pr_key"),
+    ],
+    "repo_eligibility": [
+        IndexModel([("user_id", ASCENDING), ("repo", ASCENDING)], name="user_repo", unique=True),
+    ],
+    "sync_coverage": [
+        IndexModel([("user_id", ASCENDING), ("kind", ASCENDING), ("window_start", ASCENDING)], name="user_kind_window", unique=True),
+        IndexModel([("user_id", ASCENDING), ("updated_at", DESCENDING)], name="user_updated"),
     ],
     "skills": [
         IndexModel([("user_id", ASCENDING), ("name", ASCENDING)], name="user_name", unique=True),

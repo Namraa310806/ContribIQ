@@ -135,7 +135,14 @@ async def public_dossier(token: str, request: Request):
     # Rank highlights: merged external PRs first (strongest collaboration evidence),
     # then other high-impact items — pinned evidence still takes precedence via pinned_ids.
     def _hl_rank(c: dict) -> tuple:
-        is_external_merged_pr = c.get("kind") == "pr" and c.get("merged") and c.get("is_own_repo") is False
+        is_external_merged_pr = (
+            c.get("kind") == "pr"
+            and c.get("merged")
+            and (
+                c.get("eligibility_status") == "ELIGIBLE_EXTERNAL"
+                or (not c.get("eligibility_status") and c.get("is_own_repo") is False)
+            )
+        )
         return (0 if is_external_merged_pr else 1, -(c.get("impact_score") or 0))
 
     contributions.sort(key=_hl_rank)
@@ -143,7 +150,11 @@ async def public_dossier(token: str, request: Request):
     total = len(contributions)
     prs = [c for c in contributions if c.get("kind") == "pr"]
     merged = sum(1 for c in prs if c.get("merged") or c.get("state") == "merged")
-    external = sum(1 for c in prs if c.get("is_own_repo") is False)
+    external = sum(
+        1 for c in prs
+        if (c.get("eligibility_status") == "ELIGIBLE_EXTERNAL")
+        or (not c.get("eligibility_status") and c.get("is_own_repo") is False)
+    )
     reviewed = sum(1 for c in contributions if c.get("kind") == "review")
     collab_vals = [
         (c.get("dimensions") or {}).get("collaboration")
